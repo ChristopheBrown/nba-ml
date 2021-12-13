@@ -10,6 +10,63 @@ from basketball_reference_scraper.pbp import get_pbp
 from basketball_reference_scraper.constants import TEAM_TO_TEAM_ABBR
 from basketball_reference_scraper.seasons import get_schedule
 
+#  Get the nba schedule (all games)
+year = 2021
+nba = get_schedule(year, playoffs=False)
+pbps = {}
+
+teams = [
+ 'PHILADELPHIA 76ERS',
+ 'ATLANTA HAWKS',
+ 'BOSTON CELTICS',
+ 'BROOKLYN NETS',
+ 'CHICAGO BULLS',
+ 'CHARLOTTE HORNETS',
+ 'CLEVELAND CAVALIERS',
+ 'DALLAS MAVERICKS',
+ 'DENVER NUGGETS',
+ 'DETROIT PISTONS',
+ 'GOLDEN STATE WARRIORS',
+ 'HOUSTON ROCKETS',
+ 'INDIANA PACERS',
+ 'LOS ANGELES CLIPPERS',
+ 'LOS ANGELES LAKERS',
+ 'MEMPHIS GRIZZLIES',
+ 'MIAMI HEAT',
+ 'MILWAUKEE BUCKS',
+ 'MINNESOTA TIMBERWOLVES',
+ 'NEW ORLEANS PELICANS',
+ 'NEW YORK KNICKS',
+ 'OKLAHOMA CITY THUNDER',
+ 'ORLANDO MAGIC',
+ 'PHOENIX SUNS',
+ 'PORTLAND TRAIL BLAZERS',
+ 'SACRAMENTO KINGS',
+ 'SAN ANTONIO SPURS',
+ 'TORONTO RAPTORS',
+ 'UTAH JAZZ',
+ 'WASHINGTON WIZARDS'
+]
+ 
+philly =  'PHILADELPHIA 76ERS'  # philly is separated because python doesn't like digits in the name!
+
+
+#  Indexing pbp dataframe
+QTR_IDX = 0
+TIME_IDX = 1
+HOME_IDX = 2
+AWAY_IDX = 3
+
+#  Indexing numpy array "plays"
+TEAM_IDX = 0
+TIME_IDX = 1
+SCOREPLAY_IDX = 2
+BENEFIT_IDX = 3
+DETRIMENT_IDX = 4
+MOMENTUM_IDX = 5
+
+results = ['LOSS','WIN']
+
 def shuffle_arrays(a, b, c=None):
     assert len(a) == len(b) and len(b) == len(c)
     p = np.random.permutation(len(a))
@@ -118,7 +175,14 @@ def run(nba, model=LinearSVC(random_state=0), printouts=True):
             wins.append(1 if winner == name_to_abbr(team) else 0)
 
             #  Begin processing play-by-play data on a per-game basis
-            pbp = get_pbp(date, home, away)
+            game_key = str(date) + str(home) + str(away)  # cache pbp data between uses to save time on the network
+            
+            if game_key not in pbps.keys():
+                pbp = get_pbp(date, home, away)
+                pbps[game_key] = pbp
+            else:
+                pbp = pbps[game_key]
+                
             pbp_playcount = len(pbp)
 
             # Stop collecting pbp data after n plays 
@@ -146,8 +210,14 @@ def run(nba, model=LinearSVC(random_state=0), printouts=True):
 
         #  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+        if year == 2021:  # In 2020-21, the regular seasons was capped at 72 games instead of 82.
+            games_pbp = games_pbp[:72]
+            wins = wins[:72]
+            game_summaries = game_summaries[:72]
+        
         if printouts:
-                print(np.array(games_pbp).shape)
+                print(np.array(games_pbp).shape)     
+        
         game_count = len(games_pbp)
 
         games_pbp, wins, game_summaries = shuffle_arrays(np.array(games_pbp), np.array(wins), game_summaries)
@@ -179,71 +249,21 @@ def run(nba, model=LinearSVC(random_state=0), printouts=True):
             if printouts:
                 print(f'{game_summaries[i]} ||| Prediction: {name_to_abbr(team)} {test_predictions[i-tts_idx]}')
 
-        print('\n')
         #  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
         
     test_games = game_count-tts_idx  # The number of games that were used for testing
     
-    print(f'League accuracy average: {np.mean(accuracies)*100:.2f}%')
-    print(f'League wins average: {np.mean(list(predicted_team_records.values()))/test_games:.3f}%')
+    league_accuracy = np.mean(accuracies)*100
+    league_wins_avg = np.mean(list(predicted_team_records.values()))/test_games
+    
+    print(f'test_games = {test_games}')
+    print(f'League accuracy average: {league_accuracy:.2f}%')
+    print(f'League wins average: {league_wins_avg:.3f}%')
+    
 
     for team in range(len(teams)):
         _team = teams[team].title() if teams[team] != philly else 'Philadelphia 76ers'
-        print(f'Win rate: {predicted_team_records[_team]/test_games:.3f} | Correctly predicted {accuracies[team]*100:.2f}% for team {teams[team]}')
+        print(f'({predicted_team_records[_team]}) Win rate: {(predicted_team_records[_team]/test_games):.3f} | Correctly predicted {accuracies[team]*100:.2f}% for team {teams[team]}')
+
+    return league_accuracy, league_wins_avg
         
-        
-#  Get the nba schedule (all games)
-year = 2021
-nba = get_schedule(year, playoffs=False)
-
-teams = [
- 'PHILADELPHIA 76ERS',
- 'ATLANTA HAWKS',
- 'BOSTON CELTICS',
- 'BROOKLYN NETS',
- 'CHICAGO BULLS',
- 'CHARLOTTE HORNETS',
- 'CLEVELAND CAVALIERS',
- 'DALLAS MAVERICKS',
- 'DENVER NUGGETS',
- 'DETROIT PISTONS',
- 'GOLDEN STATE WARRIORS',
- 'HOUSTON ROCKETS',
- 'INDIANA PACERS',
- 'LOS ANGELES CLIPPERS',
- 'LOS ANGELES LAKERS',
- 'MEMPHIS GRIZZLIES',
- 'MIAMI HEAT',
- 'MILWAUKEE BUCKS',
- 'MINNESOTA TIMBERWOLVES',
- 'NEW ORLEANS PELICANS',
- 'NEW YORK KNICKS',
- 'OKLAHOMA CITY THUNDER',
- 'ORLANDO MAGIC',
- 'PHOENIX SUNS',
- 'PORTLAND TRAIL BLAZERS',
- 'SACRAMENTO KINGS',
- 'SAN ANTONIO SPURS',
- 'TORONTO RAPTORS',
- 'UTAH JAZZ',
- 'WASHINGTON WIZARDS'
-]
- 
-philly =  'PHILADELPHIA 76ERS'  # philly is separated because python doesn't like digits in the name!
-
-
-#  Indexing pbp dataframe
-QTR_IDX = 0
-TIME_IDX = 1
-HOME_IDX = 2
-AWAY_IDX = 3
-
-#  Indexing numpy array "plays"
-TEAM_IDX = 0
-TIME_IDX = 1
-SCOREPLAY_IDX = 2
-BENEFIT_IDX = 3
-DETRIMENT_IDX = 4
-MOMENTUM_IDX = 5
-
-results = ['LOSS','WIN']
